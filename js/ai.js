@@ -116,20 +116,33 @@
       site: sitePayload(res, gender)
     };
     pending();
+    const payload = JSON.stringify(body);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Серверы Gemini иногда перегружены (ошибка 503) — тогда пробуем ещё раз через паузу.
+    // Лимиты (429) и отказы не повторяем: повтор их не исправит.
+    const WAITS = [5000]; // посредник уже сам повторяет запрос; сайт добавляет ещё одну попытку
     let msg;
-    try {
-      const r = await fetch(FR.ai.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      let out = null;
-      try { out = await r.json(); } catch (e) { /* не JSON */ }
+    for (let attempt = 0; ; attempt++) {
+      let r = null, out = null, netErr = false;
+      try {
+        r = await fetch(FR.ai.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload });
+        try { out = await r.json(); } catch (e) { /* не JSON */ }
+      } catch (e) { netErr = true; console.warn('ИИ-оценка:', e); }
       if (my !== seq) return; // пока ждали, начали новый анализ
-      if (!r.ok || !out) msg = (out && out.message) || `Сервер ИИ-оценки ответил ошибкой ${r.status}.`;
+      if (r && r.ok && out && out.ok && typeof out.psl === 'number') { render(out, res, gender); return; }
+      const overloaded = !netErr && r && (r.status >= 500 || (out && /^upstream/.test(out.error || '')));
+      if (overloaded && attempt < WAITS.length) {
+        $('#overall').textContent = `Gemini сейчас перегружен, пробую ещё раз (попытка ${attempt + 2} из ${WAITS.length + 1})…`;
+        await sleep(WAITS[attempt]);
+        if (my !== seq) return;
+        continue;
+      }
+      if (netErr) msg = 'Не удалось связаться с сервером ИИ-оценки. Проверьте интернет и попробуйте ещё раз.';
+      else if (overloaded) msg = 'Серверы Gemini сейчас перегружены — это на стороне Google. Попробуйте через минуту.';
+      else if (!r.ok || !out) msg = (out && out.message) || `Сервер ИИ-оценки ответил ошибкой ${r.status}.`;
       else if (!out.ok) msg = 'ИИ не стал оценивать это фото' + (out.reason ? ': ' + out.reason : '.');
-      else if (typeof out.psl !== 'number') msg = 'ИИ вернул ответ без балла. Попробуйте ещё раз.';
-      else { render(out, res, gender); return; }
-    } catch (e) {
-      if (my !== seq) return;
-      console.warn('ИИ-оценка:', e);
-      msg = 'Не удалось связаться с сервером ИИ-оценки. Проверьте интернет и попробуйте ещё раз.';
+      else msg = 'ИИ вернул ответ без балла. Попробуйте ещё раз.';
+      break;
     }
     failed(msg);
   }

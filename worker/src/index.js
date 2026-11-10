@@ -18,7 +18,9 @@
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const MAX_BODY = 4 * 1024 * 1024; // 4 МБ на запрос с двумя фото хватает с запасом
-const RATE = { windowMs: 10 * 60 * 1000, max: 6 }; // не больше 6 оценок за 10 минут с одного адреса
+const RATE = { windowMs: 10 * 60 * 1000, max: 12 }; // не больше 12 запросов за 10 минут с одного адреса
+const RETRY_WAIT = 2000; // пауза перед повтором, если Gemini перегружен (5xx)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const SYSTEM = `Ты оцениваешь внешность лица по фото для сайта в духе луксмаксинга.
 Шкала PSL от 0 до 8: средний взрослый человек — около 4.0; 5.25 и выше — редкость (Chadlite/Stacylite),
@@ -185,7 +187,8 @@ async function rate(request, env, cors) {
   const models = String(env.MODELS || 'gemini-3.6-flash').split(',').map((s) => s.trim()).filter(Boolean);
   let last = { status: 502, error: 'upstream', message: 'Gemini не ответил.' };
   for (const model of models) {
-    for (const withSchema of [true, false]) {
+    let retried = false; // при перегрузке (5xx) повторяем ту же модель один раз
+    for (let withSchema = true; ; ) {
       let res;
       try { res = await callGemini(env, model, parts, withSchema); } catch (e) { last = { status: 502, error: 'upstream', message: 'Не удалось связаться с Gemini.' }; break; }
       if (res.ok) {
@@ -195,9 +198,11 @@ async function rate(request, env, cors) {
         return json(200, { ...out, model }, cors);
       }
       const detail = (await res.text()).slice(0, 300);
-      if (res.status === 400 && withSchema && /schema|responseSchema|Unknown name/i.test(detail)) continue; // схему не приняли — пробуем без неё
+      if (res.status === 400 && withSchema && /schema|responseSchema|Unknown name/i.test(detail)) { withSchema = false; continue; } // схему не приняли — пробуем без неё
+      if (res.status >= 500 && !retried) { retried = true; await sleep(RETRY_WAIT); continue; } // перегрузка — ещё раз
       if (res.status === 429) last = { status: 429, error: 'quota', message: 'Бесплатный лимит Gemini на сейчас исчерпан. Попробуйте позже.' };
       else if (res.status === 400 && /API key|API_KEY/i.test(detail)) return json(500, { error: 'bad_key', message: 'Ключ Gemini на сервере неверный.' }, cors);
+      else if (res.status >= 500) last = { status: 503, error: 'overloaded', message: 'Серверы Gemini сейчас перегружены — это на стороне Google. Попробуйте через минуту.' };
       else last = { status: 502, error: 'upstream_' + res.status, message: 'Gemini вернул ошибку ' + res.status + '.' };
       break; // эта модель не подошла — следующая по списку
     }

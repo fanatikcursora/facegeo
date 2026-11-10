@@ -61,13 +61,25 @@ r = await call({ gender: 'm' }, 'https://site.test', 'ip7'); assert.equal(r.stat
 assert.equal(calls.length, 0);
 ok('чужой сайт и пустой запрос');
 
-// 8. ограничение частоты: 6 за 10 минут с адреса
-const t = 1e12; for (let i = 0; i < 6; i++) assert.equal(rateLimited('z', t + i), false);
+// 8. ограничение частоты: 12 за 10 минут с адреса
+const t = 1e12; for (let i = 0; i < 12; i++) assert.equal(rateLimited('z', t + i), false);
 assert.equal(rateLimited('z', t + 10), true); assert.equal(rateLimited('z', t + 11 * 60 * 1000), false);
 ok('ограничение частоты');
 
 // 9. JSON, обёрнутый в текст, тоже читается
 assert.equal(parseGemini({ candidates: [{ content: { parts: [{ text: 'Вот: ' + JSON.stringify(good) + ' готово' }] } }] }).psl, 8);
 ok('JSON внутри текста');
+
+// 10. перегрузка (503): та же модель ещё раз, и успех
+mock(gem('overloaded', 503), gem(answer(good)));
+r = await call({ frontal: img }, 'https://site.test', 'ip10'); j = await r.json();
+assert.equal(r.status, 200); assert.equal(j.model, 'model-a'); assert.equal(calls.length, 2);
+ok('перегрузка → повтор той же модели');
+
+// 11. перегрузка у обеих моделей (по два раза) → 503 с понятным текстом
+mock(gem('o', 503), gem('o', 503), gem('o', 503), gem('o', 503));
+r = await call({ frontal: img }, 'https://site.test', 'ip11'); j = await r.json();
+assert.equal(r.status, 503); assert.equal(j.error, 'overloaded'); assert.equal(calls.length, 4);
+ok('перегрузка у всех моделей');
 
 console.log(`все проверки пройдены: ${n}`);

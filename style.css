@@ -6,6 +6,8 @@
   :root { --bg: #111113; --card: #1c1c1f; --text: #f4f4f5; --muted: #9ca3af; --line: #2e2e33; --accent: #60a5fa; }
 }
 * { box-sizing: border-box; }
+/* «скрыто» должно скрывать всегда, даже у блоков с display: grid/flex */
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 860px; margin: 0 auto; padding: 16px 16px 64px; }
 h2 { margin: 0 0 10px; font-size: 17px; }
