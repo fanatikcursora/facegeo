@@ -111,13 +111,28 @@
       rows.push({ y, x: bx, c });
     }
     // сглаживание: медиана по 5 строкам
-    const sm = rows.map((r, i) => {
-      if (!r) return null;
+    const median5 = (arr, i) => {
       const v = [];
-      for (let k = -2; k <= 2; k++) if (rows[i + k]) v.push(rows[i + k].x);
+      for (let k = -2; k <= 2; k++) if (arr[i + k] != null) v.push(arr[i + k]);
       v.sort((a, b) => a - b);
-      return { y: r.y, x: v[v.length >> 1], c: r.c };
-    });
+      return v[v.length >> 1];
+    };
+    const rx = rows.map((r) => (r ? r.x : null));
+    const sm = rows.map((r, i) => (r ? { y: r.y, x: median5(rx, i), c: r.c } : null));
+
+    // Передний край именно кожи лица в каждой строке, за волосами: если чёлка закрывает лоб,
+    // спереди в строке волосы, а линия лба — первый пиксель кожи лица за ними.
+    const skinX = [];
+    for (let y = 0; y < WORK; y++) {
+      let found = null;
+      for (let x = start; x >= 0 && x < WORK; x += step) {
+        const c = cls(x, y);
+        if (c === FACE) { found = x; break; }
+        if (c === BODY) break;
+      }
+      skinX.push(found);
+    }
+    const skinSm = skinX.map((x, i) => (x == null ? null : median5(skinX, i)));
 
     // строки лица: первая и последняя, где спереди — кожа лица
     let yTop = -1, yBot = -1;
@@ -145,9 +160,22 @@
     }
     const D = yBot - prn; // кончик носа → низ подбородка: единица длины для окон поиска
     if (D < 30) return fail('кончик носа не найден');
+    // Выше кончика носа, где спереди волосы, контуром служит линия кожи за ними — лоб под чёлкой.
+    let underHair = 0;
+    for (let y = 0; y < prn; y++) {
+      if (sm[y] && sm[y].c === FACE) continue;
+      if (skinSm[y] != null) { sm[y] = { y, x: skinSm[y], c: FACE, underHair: true }; underHair++; }
+    }
+    // Кожа над кончиком носа: поднимаемся по контуру, пока спереди кожа лица (разрывы до 3 строк
+    // не считаются). Выше начинаются волосы.
+    let ySkinTop = prn, gap = 0;
+    for (let y = prn - 1; y >= 0; y--) {
+      if (sm[y] && sm[y].c === FACE) { ySkinTop = y; gap = 0; } else if (++gap > 3) break;
+    }
     // Переносица — самая глубокая впадина под прямой «лоб → кончик носа».
     // Просто «самая задняя точка» не годится: покатый лоб у линии волос уходит ещё дальше назад.
-    const yA = clampY(Math.max(yTop + span * 0.03, prn - 0.85 * D));
+    // Глабелла обычно на 0.85–1.0 D выше кончика носа, поэтому окно берём с запасом.
+    const yA = clampY(Math.max(ySkinTop, prn - 1.2 * D));
     const depth = (y, ya, yb) => { // насколько точка контура позади хорды ya→yb (плюс — позади)
       const t = (y - ya) / (yb - ya);
       return (f(ya) + (f(yb) - f(ya)) * t) - f(y);
@@ -158,27 +186,57 @@
       const d = depth(y, yA, prn);
       if (d > nd) { nd = d; n = y; }
     }
-    // Глабелла — точка лба, сильнее всего выступающая над прямой «верх лба → переносица».
-    let g = clampY(n - 0.2 * D), gd = -Infinity;
-    for (let y = yA + 1; y < n - 0.05 * D; y++) {
-      if (!sm[y]) continue;
-      const d = -depth(y, yA, n);
-      if (d > gd) { gd = d; g = y; }
+    // Лоб виден, если над переносицей есть заметный участок кожи — открытой или под волосами.
+    // Если кожа кончается почти сразу над переносицей, лоб закрыт: переносица там, где кожа
+    // уходит под волосы, а глабеллу по фото не найти, её ставит человек.
+    const foreheadHidden = (n - ySkinTop) < 0.25 * D;
+    let g;
+    if (foreheadHidden) {
+      let bv = Infinity;
+      for (let y = yA; y <= clampY(prn - 0.3 * D); y++) if (sm[y] && f(y) < bv) { bv = f(y); n = y; }
+    } else {
+      // Глабелла — точка лба, сильнее всего выступающая над прямой «верх лба → переносица».
+      g = clampY(n - 0.2 * D);
+      let gd = -Infinity;
+      for (let y = yA + 1; y < n - 0.05 * D; y++) {
+        if (!sm[y]) continue;
+        const d = -depth(y, yA, n);
+        if (d > gd) { gd = d; g = y; }
+      }
+      if (g >= n) g = clampY(n - 0.2 * D);
+      // Переносица уточняется: самая глубокая точка под прямой «глабелла → кончик носа».
+      let n2 = n, nd2 = -Infinity;
+      for (let y = g + 1; y <= clampY(prn - 0.25 * D); y++) {
+        if (!sm[y]) continue;
+        const d = depth(y, g, prn);
+        if (d > nd2) { nd2 = d; n2 = y; }
+      }
+      n = n2;
     }
-    if (g >= n) g = clampY(n - 0.2 * D);
     /* Ниже кончика носа контур идёт волной: впадина у основания носа → верхняя губа →
      * смыкание губ → нижняя губа → складка → подбородок → резкий уход назад, к шее. */
     let yEnd = Math.min(WORK - 1, Math.round(yBot + 0.2 * D));
     while (yEnd > prn && !sm[yEnd]) yEnd--;
 
-    // Ментон — низ подбородка: строка перед самым большим скачком контура назад (дальше шея).
-    let me = -1, jump = 4;
-    for (let y = clampY(prn + 0.5 * D); y < yEnd; y++) {
-      if (!sm[y] || !sm[y + 1]) continue;
-      const d = f(y) - f(y + 1);
-      if (d > jump) { jump = d; me = y; }
+    // Ментон — низ подбородка. Сначала ищем, где контур уходит к шее (самый большой скачок
+    // назад), потом поднимаемся от этого места, пока контур идёт назад круче 45°: верх этого
+    // крутого участка — изгиб подбородка. Сверху вниз так искать нельзя: под нижней губой
+    // контур тоже резко уходит назад, и изгиб нашёлся бы в складке.
+    let yNeck = -1;
+    {
+      let jump = 4;
+      for (let y = clampY(prn + 0.5 * D); y < yEnd; y++) {
+        if (!sm[y] || !sm[y + 1]) continue;
+        const d = f(y) - f(y + 1);
+        if (d > jump) { jump = d; yNeck = y; }
+      }
     }
-    if (me < 0) me = Math.min(yBot, yEnd);
+    if (yNeck < 0) yNeck = Math.min(yBot, yEnd);
+    let me = yNeck;
+    for (let y = yNeck - 1; y > prn + 0.5 * D; y--) {
+      if (!sm[y] || !sm[y + 3]) break;
+      if ((f(y) - f(y + 3)) / 3 >= 1) me = y; else break;
+    }
     const H = me - prn; // кончик носа → ментон
 
     // Выступы и впадины по порядку сверху вниз. Порог h отсекает рябь: выступ засчитан,
@@ -233,13 +291,14 @@
       const d = Math.abs(sm[y].x - midX);
       if (d < cd) { cd = d; cm = y; }
     }
-    // Погонион — точка подбородка, сильнее всего выступающая над прямой «нижняя губа → ментон».
-    // (Просто «самая передняя точка» не годится: у скошенного подбородка выступа вперёд нет.)
-    const pg = deepest(li, me, -1);
-    // Складка — самая глубокая точка между нижней губой и погонионом.
-    const sl = deepest(li, pg, 1);
+    // Складка — самая глубокая точка под прямой «нижняя губа → ментон». Погонион — точка
+    // подбородка, сильнее всего выступающая над прямой «складка → ментон». Искать погонион
+    // сразу от губы нельзя: у пухлой нижней губы самой выступающей окажется сама губа.
+    // (Просто «самая передняя точка» тоже не годится: у скошенного подбородка выступа вперёд нет.)
+    const sl = deepest(li, me, 1);
+    const pg = deepest(sl, me, -1);
 
-    const order = [g, n, prn, cm, sn, ls, li, sl, pg, me];
+    const order = foreheadHidden ? [n, prn, cm, sn, ls, li, sl, pg, me] : [g, n, prn, cm, sn, ls, li, sl, pg, me];
     for (let i = 1; i < order.length; i++) if (order[i] <= order[i - 1] || !sm[order[i]]) return fail('точки контура идут не по порядку: ' + order.join(','));
 
     /* ---- 5. угол челюсти ----
@@ -270,12 +329,20 @@
     /* ---- 6. обратно в координаты фото ---- */
     const k = crop.s / WORK;
     const out = (p) => [crop.x + p[0] * k, crop.y + p[1] * k];
-        const pts = {
-      g: out(P(g)), n: out(P(n)), prn: out(P(prn)), cm: out(P(cm)), sn: out(P(sn)),
+    // Если лоб закрыт, глабелла ставится над переносицей «на глаз» — ждёт ручной правки.
+    const gPt = foreheadHidden ? [sm[n].x + dir * 0.05 * D, n - 0.2 * D] : P(g);
+    const pts = {
+      g: out(gPt), n: out(P(n)), prn: out(P(prn)), cm: out(P(cm)), sn: out(P(sn)),
       ls: out(P(ls)), li: out(P(li)), sl: out(P(sl)), pg: out(P(pg)), me: out(P(me)),
       go: out(go), tr: out(tr)
     };
-    return { pts, facingRight, contour: sm.filter(Boolean).map((r) => out([r.x, r.y])) };
+    // unsure — точки, которые по контуру не видны: замеры по ним не считаются,
+    // пока человек сам их не поставит.
+    // При закрытом лбе переносица тоже ставится по краю чёлки, а не по кости — её тоже правит человек.
+    const unsure = ['go', 'tr'].concat(foreheadHidden ? ['g', 'n'] : []);
+    // gUnderHair — глабелла найдена по линии кожи под волосами: точная, но стоит проверить глазами.
+    const gUnderHair = !foreheadHidden && !!(sm[g] && sm[g].underHair);
+    return { pts, facingRight, unsure, foreheadHidden, gUnderHair, contour: sm.filter(Boolean).map((r) => out([r.x, r.y])) };
   }
 
   FR.profileAuto = { detect };

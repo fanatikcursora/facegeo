@@ -304,5 +304,33 @@
     return drops[drops.length >> 1];
   }
 
-  FR.skin = { analyze, jawDefinition };
+  /* --------------------------------------------------------------------------
+   * Фото это или рисунок. Внутри лица считаем среднюю насыщенность цвета и долю
+   * почти белых пикселей.
+   *   gray    — цвета нет совсем: чёрно-белое фото или рисунок. Кожу не оценить.
+   *   drawing — цвета нет и большая часть лица белая: штрихи на белом листе.
+   *             Кроме кожи, по рисунку нельзя мерить миллиметры (глаза нарисованы
+   *             крупнее настоящих) и тень под челюстью.
+   * ------------------------------------------------------------------------ */
+  function colorStats(srcCanvas, P) {
+    const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
+    const xs = [234, 454].map((i) => P[i][0]), ys = [10, 152].map((i) => P[i][1]);
+    const x0 = Math.max(0, Math.floor(Math.min(...xs))), x1 = Math.min(srcCanvas.width, Math.ceil(Math.max(...xs)));
+    const y0 = Math.max(0, Math.floor(Math.min(...ys))), y1 = Math.min(srcCanvas.height, Math.ceil(Math.max(...ys)));
+    if (x1 - x0 < 8 || y1 - y0 < 8) return { sat: 0, white: 0, gray: false, drawing: false };
+    const d = ctx.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+    let sat = 0, white = 0, n = 0;
+    const step = Math.max(1, Math.floor(Math.sqrt((x1 - x0) * (y1 - y0) / 4000))) * 4;
+    for (let i = 0; i < d.length; i += step) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      sat += Math.max(r, g, b) - Math.min(r, g, b);
+      if (Math.min(r, g, b) > 210) white++;
+      n++;
+    }
+    sat /= n; white /= n;
+    const gray = sat < 10;
+    return { sat, white, gray, drawing: sat < 18 && white > 0.45 };
+  }
+
+  FR.skin = { analyze, jawDefinition, colorStats };
 })();

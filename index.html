@@ -9,12 +9,9 @@
 </head>
 <body>
 <main>
-  <h1>FaceGeo</h1>
-  <p class="lead">Оценка лица по замерам: пропорции, углы, симметрия, размеры в миллиметрах, кожа. Всё считается в вашем браузере — фото никуда не отправляются.</p>
-
   <section class="card">
     <div class="row">
-      <span class="label">Пол (от него зависят идеалы):</span>
+      <span class="label">Пол:</span>
       <label><input type="radio" name="gender" value="m" checked> Мужской</label>
       <label><input type="radio" name="gender" value="f"> Женский</label>
     </div>
@@ -23,14 +20,16 @@
       <label class="drop" id="frontalDrop">
         <input type="file" id="frontalFile" accept="image/*" hidden>
         <img id="frontalPreview" alt="" hidden>
-        <b>Анфас</b> <span class="req">обязательно</span>
-        <small>Лицо прямо, нейтральное выражение, рот закрыт, ровный свет. Снимайте с 1.5 м и дальше (с зумом) — вблизи объектив искажает пропорции.</small>
+        <b>Анфас</b>
+        <small>Лицо прямо, без улыбки, не вплотную к камере</small>
+        <button type="button" class="paste" data-kind="frontal">Вставить из буфера</button>
       </label>
       <label class="drop" id="profileDrop">
         <input type="file" id="profileFile" accept="image/*" hidden>
         <img id="profilePreview" alt="" hidden>
-        <b>Профиль</b> <span class="opt">по желанию</span>
-        <small>Строго сбоку, волосы не закрывают ухо и челюсть. Добавляет углы челюсти, носа и подбородка.</small>
+        <b>Профиль <span class="opt">по желанию</span></b>
+        <small>Строго сбоку, ухо и челюсть видны</small>
+        <button type="button" class="paste" data-kind="profile">Вставить из буфера</button>
       </label>
     </div>
 
@@ -83,8 +82,10 @@
     <div class="card" id="profileBox" hidden>
       <h2>Профиль</h2>
       <p id="profileHint"></p>
-      <button id="flip" class="small">Отразить точки (лицо смотрит в другую сторону)</button>
-      <button id="confirmProfile" class="small">Точки расставлены — учесть профиль</button>
+      <div class="row-buttons">
+        <button id="confirmProfile" class="small">Точки на местах — учесть профиль</button>
+        <button id="redoProfile" class="small">Расставить заново (3 касания)</button>
+      </div>
       <canvas id="profileCanvas"></canvas>
       <p id="profileState" class="muted"></p>
       <ul id="pointList" class="points"></ul>

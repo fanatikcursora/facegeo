@@ -7,25 +7,21 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
-h1 { margin: 0 0 4px; font-size: 26px; }
+main { max-width: 860px; margin: 0 auto; padding: 16px 16px 64px; }
 h2 { margin: 0 0 10px; font-size: 17px; }
 h3 { margin: 22px 0 8px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; }
 .h-score { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
-.lead { margin: 0 0 18px; color: var(--muted); }
 .muted { color: var(--muted); font-size: 13px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
 .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
 .label { color: var(--muted); }
 
 .uploads { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-.drop { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 2px dashed var(--line); border-radius: 10px; cursor: pointer; min-height: 150px; }
+.drop { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; min-height: 110px; }
 .drop.over, .drop:hover { border-color: var(--accent); }
-.drop.has { border-style: solid; }
 .drop img { max-height: 180px; max-width: 100%; object-fit: contain; border-radius: 6px; margin-bottom: 6px; align-self: flex-start; }
 .drop small { color: var(--muted); }
-.req, .opt { font-size: 12px; color: var(--muted); }
-.req { color: var(--bad); }
+.opt { font-size: 12px; font-weight: 400; color: var(--muted); }
 
 button { font: inherit; padding: 10px 18px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
 button:disabled { opacity: .45; cursor: default; }
@@ -74,3 +70,9 @@ code { background: var(--line); padding: 1px 5px; border-radius: 4px; }
   #psl { font-size: 42px; }
   #tier { font-size: 24px; }
 }
+
+/* «Вставить из буфера» — просто ссылка-кнопка внутри поля загрузки; ряд кнопок профиля */
+.drop .paste { align-self: flex-start; margin-top: auto; padding: 4px 0 0; background: none; border: 0; color: var(--accent); font-size: 13px; }
+.drop .paste:hover { text-decoration: underline; }
+.row-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.row-buttons button.small { margin-bottom: 0; }

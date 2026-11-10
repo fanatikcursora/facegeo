@@ -9,26 +9,62 @@
 (function () {
   const G = FR.geo;
 
-  /* lm — точка MediaPipe для черновой расстановки; t — место в шаблоне (доли кадра, лицо смотрит влево) */
+  /* lm — точка MediaPipe для черновой расстановки.
+   * f  — среднее положение точки в системе «кончик носа → ментон»: [вдоль, назад] в долях
+   *      расстояния prn–me. Снято авторазметкой со 102 профилей Face Research Lab London Set.
+   *      По нему точки расставляются после трёх касаний, если автоматика не сработала. */
   const POINTS = [
-    { id: 'g',   code: 'G',   name: 'Глабелла',        hint: 'самая выступающая точка лба между бровями', lm: 9,   t: [0.30, 0.27] },
-    { id: 'n',   code: 'N',   name: 'Переносица',      hint: 'самая глубокая точка между лбом и носом',   lm: 168, t: [0.33, 0.35] },
-    { id: 'prn', code: 'Prn', name: 'Кончик носа',     hint: 'самая выступающая вперёд точка носа',       lm: 1,   t: [0.20, 0.49] },
-    { id: 'cm',  code: 'Cm',  name: 'Колумелла',       hint: 'середина перемычки между кончиком и основанием носа', lm: 19, t: [0.25, 0.525] },
-    { id: 'sn',  code: 'Sn',  name: 'Основание носа',  hint: 'где нос переходит в верхнюю губу',          lm: 2,   t: [0.29, 0.545] },
-    { id: 'ls',  code: 'Ls',  name: 'Верхняя губа',    hint: 'самая выступающая точка верхней губы',      lm: 0,   t: [0.26, 0.61] },
-    { id: 'li',  code: 'Li',  name: 'Нижняя губа',     hint: 'самая выступающая точка нижней губы',       lm: 17,  t: [0.27, 0.665] },
-    { id: 'sl',  code: 'Sl',  name: 'Складка',         hint: 'самая глубокая точка между губой и подбородком', lm: 18, t: [0.30, 0.705] },
-    { id: 'pg',  code: 'Pg',  name: 'Погонион',        hint: 'самая выступающая вперёд точка подбородка', lm: 199, t: [0.28, 0.765] },
-    { id: 'me',  code: 'Me',  name: 'Ментон',          hint: 'самая нижняя точка подбородка',             lm: 152, t: [0.33, 0.81] },
-    { id: 'go',  code: 'Go',  name: 'Угол челюсти',    hint: 'где челюсть поворачивает вверх к уху',      lm: null, t: [0.60, 0.72] },
-    { id: 'tr',  code: 'Tr',  name: 'Ветвь челюсти',   hint: 'задний край челюсти под мочкой уха',        lm: null, t: [0.63, 0.52] }
+    { id: 'g',   code: 'G',   name: 'Глабелла',        hint: 'самая выступающая точка лба между бровями', lm: 9,   f: [-0.66, 0.54] },
+    { id: 'n',   code: 'N',   name: 'Переносица',      hint: 'самая глубокая точка между лбом и носом',   lm: 168, f: [-0.33, 0.43] },
+    { id: 'prn', code: 'Prn', name: 'Кончик носа',     hint: 'самая выступающая вперёд точка носа',       lm: 1,   f: [0, 0] },
+    { id: 'cm',  code: 'Cm',  name: 'Колумелла',       hint: 'середина перемычки между кончиком и основанием носа', lm: 19, f: [0.15, 0.07] },
+    { id: 'sn',  code: 'Sn',  name: 'Основание носа',  hint: 'где нос переходит в верхнюю губу',          lm: 2,   f: [0.22, 0.13] },
+    { id: 'ls',  code: 'Ls',  name: 'Верхняя губа',    hint: 'самая выступающая точка верхней губы',      lm: 0,   f: [0.38, 0.06] },
+    { id: 'li',  code: 'Li',  name: 'Нижняя губа',     hint: 'самая выступающая точка нижней губы',       lm: 17,  f: [0.56, 0.03] },
+    { id: 'sl',  code: 'Sl',  name: 'Складка',         hint: 'самая глубокая точка между губой и подбородком', lm: 18, f: [0.72, 0.07] },
+    { id: 'pg',  code: 'Pg',  name: 'Погонион',        hint: 'самая выступающая вперёд точка подбородка', lm: 199, f: [0.87, -0.01] },
+    { id: 'me',  code: 'Me',  name: 'Ментон',          hint: 'самая нижняя точка подбородка',             lm: 152, f: [1, 0] },
+    { id: 'go',  code: 'Go',  name: 'Угол челюсти',    hint: 'где челюсть поворачивает вверх к уху',      lm: null, f: [1, 0.91] },
+    { id: 'tr',  code: 'Tr',  name: 'Ветвь челюсти',   hint: 'задний край челюсти под мочкой уха',        lm: null, f: [0.5, 1.18] }
   ];
 
-  function template(W, H, facingRight) {
+  /* Расстановка по трём касаниям: кончик носа, низ подбородка, угол челюсти.
+   * Остальные точки ставятся по средним пропорциям, повёрнутым и масштабированным под
+   * эти три. Угол челюсти задаёт, в какую сторону смотрит лицо. */
+  function fitTemplate(prn, me, go) {
+    const L = G.d2(prn, me) || 1;
+    const e1 = [(me[0] - prn[0]) / L, (me[1] - prn[1]) / L];
+    let e2 = [-e1[1], e1[0]];
+    if ((go[0] - prn[0]) * e2[0] + (go[1] - prn[1]) * e2[1] < 0) e2 = [-e2[0], -e2[1]];
+    const at = (f) => [prn[0] + (e1[0] * f[0] + e2[0] * f[1]) * L, prn[1] + (e1[1] * f[0] + e2[1] * f[1]) * L];
     const pts = {};
-    for (const p of POINTS) pts[p.id] = [(facingRight ? 1 - p.t[0] : p.t[0]) * W, p.t[1] * H];
+    for (const p of POINTS) pts[p.id] = at(p.f);
+    const goAvg = pts.go;
+    pts.prn = prn.slice(); pts.me = me.slice(); pts.go = go.slice();
+    // ветвь челюсти сдвигается вместе с углом челюсти
+    pts.tr = [pts.tr[0] + go[0] - goAvg[0], pts.tr[1] + go[1] - goAvg[1]];
     return pts;
+  }
+
+  /* Какие точки нужны каждому замеру: если хоть одна из них не подтверждена, замер не считается */
+  const METRIC_POINTS = {
+    gonial: ['tr', 'go', 'me'],
+    nasofrontal: ['g', 'n', 'prn'],
+    nasolabial: ['cm', 'sn', 'ls'],
+    mentolabial: ['li', 'sl', 'pg'],
+    convexity: ['g', 'sn', 'pg'],
+    eLineUpper: ['prn', 'pg', 'ls'],
+    eLineLower: ['prn', 'pg', 'li']
+  };
+
+  /* Пределы, за которыми у живого человека значений не бывает: если замер вышел за них,
+   * точки стоят неправильно, и такой замер в оценку не идёт. */
+  const LIMITS = {
+    gonial: [95, 150], nasofrontal: [100, 175], nasolabial: [60, 155], mentolabial: [70, 175],
+    convexity: [140, 185], eLineUpper: [-20, 12], eLineLower: [-18, 14]
+  };
+  function implausible(v) {
+    return Object.keys(LIMITS).filter((k) => v[k] !== undefined && (v[k] < LIMITS[k][0] || v[k] > LIMITS[k][1]));
   }
 
   function fromLandmarks(lms, W, H) {
@@ -61,8 +97,23 @@
     v.gonial = G.angle2(pts.tr, pts.go, pts.me);
     v.nasofrontal = G.angle2(pts.g, pts.n, pts.prn);
     v.nasolabial = G.angle2(pts.cm, pts.sn, pts.ls);
-    v.mentolabial = G.angle2(pts.li, pts.sl, pts.pg);
-    v.convexity = G.angle2(pts.g, pts.sn, pts.pg);
+    // Точка p впереди линии a→b, если по горизонтали она ближе к носу, чем линия на той же
+    // высоте. Куда смотрит лицо, показывает кончик носа относительно ветви челюсти.
+    const facingSign = Math.sign(pts.prn[0] - pts.tr[0]) || -1;
+    const ahead = (p, a, b) => {
+      const dy = b[1] - a[1];
+      if (Math.abs(dy) < 1e-6) return false;
+      const xLine = a[0] + (b[0] - a[0]) * (p[1] - a[1]) / dy;
+      return facingSign * (p[0] - xLine) > 0;
+    };
+    // Губо-подбородочный угол: обычно складка вдавлена (меньше 180°); если складки нет
+    // и контур выпуклый — больше 180°.
+    const ml = G.angle2(pts.li, pts.sl, pts.pg);
+    v.mentolabial = ahead(pts.sl, pts.li, pts.pg) ? 360 - ml : ml;
+    // Выпуклость профиля: меньше 180° — подбородок позади линии «глабелла → основание носа»
+    // (выпуклый профиль), больше 180° — впереди неё (вогнутый профиль).
+    const cx = G.angle2(pts.g, pts.sn, pts.pg);
+    v.convexity = ahead(pts.pg, pts.g, pts.sn) ? 360 - cx : cx;
 
     // E-линия: кончик носа → погонион. Плюс — губа впереди линии.
     const facing = Math.sign(pts.prn[0] - pts.tr[0]) || -1;
@@ -74,7 +125,8 @@
     return v;
   }
 
-  function draw(ctx, img, pts, active) {
+  /* unsure — точки, которые ждут ручной установки: рисуются фиолетовыми с пунктирным кольцом */
+  function draw(ctx, img, pts, active, unsure) {
     const W = ctx.canvas.width, H = ctx.canvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(img, 0, 0, W, H);
@@ -100,8 +152,14 @@
       const side = outside[p.id] ? front : -front;
       ctx.textAlign = side > 0 ? 'left' : 'right';
       const tx = x + side * 8 * s, ty = y + 4 * s;
+      const waiting = unsure && unsure.has(p.id);
+      if (waiting) {
+        ctx.beginPath(); ctx.arc(x, y, 11 * s, 0, 7);
+        ctx.setLineDash([3 * s, 3 * s]); ctx.lineWidth = 1.6 * s; ctx.strokeStyle = '#e599f7'; ctx.stroke();
+        ctx.setLineDash([]);
+      }
       ctx.beginPath(); ctx.arc(x, y, (p.id === active ? 6 : 4) * s, 0, 7);
-      ctx.fillStyle = p.id === active ? '#ffd43b' : '#ff3b3b'; ctx.fill();
+      ctx.fillStyle = p.id === active ? '#ffd43b' : waiting ? '#cc5de8' : '#ff3b3b'; ctx.fill();
       ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.lineWidth = 3 * s; ctx.strokeStyle = 'rgba(0,0,0,.75)';
       ctx.strokeText(p.code, tx, ty);
@@ -109,5 +167,5 @@
     }
   }
 
-  FR.profile = { POINTS, template, fromLandmarks, sideness, compute, draw };
+  FR.profile = { POINTS, METRIC_POINTS, fitTemplate, implausible, fromLandmarks, sideness, compute, draw };
 })();

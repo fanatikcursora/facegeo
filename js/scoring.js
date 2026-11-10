@@ -52,6 +52,15 @@
       cats.push({ id: c.id, name: c.name, w: cw, score, rows: rows.filter((r) => r.def.cat === c.id) });
       wSum += cw; acc += cw * score;
     }
+    // Категория, которую по фото оценить нельзя (кроме профиля — для него своя калибровка),
+    // считается средней по выборке: так пропуск не сдвигает оценку.
+    const imputed = [];
+    for (const c of C.categories) {
+      if (c.id === 'profile' || !c.avg || cats.some((x) => x.id === c.id)) continue;
+      const cw = pick(c.w, gender);
+      wSum += cw; acc += cw * pick(c.avg, gender);
+      imputed.push(c.name);
+    }
     const mean = wSum ? acc / wSum : 0;
 
     const counted = rows.filter((r) => r.w >= 0.8).sort((a, b) => a.score - b.score);
@@ -65,7 +74,7 @@
     const t = -Math.log(1 - overall + C.psl.eps);
     const z = (t - cal.mean) / cal.sd;
     const psl = Math.max(0, Math.min(C.psl.max, C.psl.center + C.psl.spread * z));
-    return { rows, cats, mean, overall, z, psl, tier: tierFor(psl, gender), worst, best };
+    return { rows, cats, imputed, mean, overall, z, psl, tier: tierFor(psl, gender), worst, best };
   }
 
   FR.scoring = { scoreMetric, total, tierFor };
