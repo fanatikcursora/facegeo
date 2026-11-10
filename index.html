@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FaceGeo — оценка лица по замерам</title>
+  <link rel="stylesheet" href="style.css">
+  <script>document.querySelector('link[rel=stylesheet]').href = 'style.css?t=' + Date.now();</script>
+</head>
+<body>
+<main>
+  <h1>FaceGeo</h1>
+  <p class="lead">Оценка лица по замерам: пропорции, углы, симметрия, размеры в миллиметрах, кожа. Всё считается в вашем браузере — фото никуда не отправляются.</p>
+
+  <section class="card">
+    <div class="row">
+      <span class="label">Пол (от него зависят идеалы):</span>
+      <label><input type="radio" name="gender" value="m" checked> Мужской</label>
+      <label><input type="radio" name="gender" value="f"> Женский</label>
+    </div>
+
+    <div class="uploads">
+      <label class="drop" id="frontalDrop">
+        <input type="file" id="frontalFile" accept="image/*" hidden>
+        <img id="frontalPreview" alt="" hidden>
+        <b>Анфас</b> <span class="req">обязательно</span>
+        <small>Лицо прямо, нейтральное выражение, рот закрыт, ровный свет. Снимайте с 1.5 м и дальше (с зумом) — вблизи объектив искажает пропорции.</small>
+      </label>
+      <label class="drop" id="profileDrop">
+        <input type="file" id="profileFile" accept="image/*" hidden>
+        <img id="profilePreview" alt="" hidden>
+        <b>Профиль</b> <span class="opt">по желанию</span>
+        <small>Строго сбоку, волосы не закрывают ухо и челюсть. Добавляет углы челюсти, носа и подбородка.</small>
+      </label>
+    </div>
+
+    <button id="go" disabled>Анализировать</button>
+    <p id="status" class="status"></p>
+  </section>
+
+  <section id="report" hidden>
+    <div class="card score">
+      <div class="score-main">
+        <div><span id="psl">—</span><span class="of"> / 8 PSL</span></div>
+        <div id="tier">—</div>
+      </div>
+      <p id="overall" class="muted"></p>
+      <div id="cats"></div>
+    </div>
+
+    <div class="card" id="warnbox" hidden>
+      <h2>Что снижает точность</h2>
+      <ul id="warnings"></ul>
+    </div>
+
+    <div class="card two">
+      <div>
+        <h2>Что тянет вниз</h2>
+        <ul id="worst"></ul>
+      </div>
+      <div>
+        <h2>Сильные стороны</h2>
+        <ul id="best"></ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Замеры анфас</h2>
+      <canvas id="frontalCanvas"></canvas>
+      <p class="legend">
+        <i style="background:#ffd43b"></i>скулы
+        <i style="background:#ff922b"></i>челюсть
+        <i style="background:#da77f2"></i>подбородок
+        <i style="background:#22b8cf"></i>зрачки
+        <i style="background:#51cf66"></i>мидфейс
+        <i style="background:#f783ac"></i>тилт глаз
+        <i style="background:#4dabf7"></i>нос
+        <i style="background:#ff6b6b"></i>рот
+      </p>
+      <p id="pose" class="muted"></p>
+    </div>
+
+    <div class="card" id="profileBox" hidden>
+      <h2>Профиль</h2>
+      <p id="profileHint"></p>
+      <button id="flip" class="small">Отразить точки (лицо смотрит в другую сторону)</button>
+      <button id="confirmProfile" class="small">Точки расставлены — учесть профиль</button>
+      <canvas id="profileCanvas"></canvas>
+      <p id="profileState" class="muted"></p>
+      <ul id="pointList" class="points"></ul>
+    </div>
+
+    <div class="card" id="skinBox" hidden>
+      <h2>Кожа</h2>
+      <canvas id="skinCanvas"></canvas>
+      <p class="legend"><i style="background:#ff3b3b"></i>красные очаги <i style="background:#3b9bff"></i>тёмные точки и пятна</p>
+      <p id="skinNote" class="muted"></p>
+    </div>
+
+    <div class="card">
+      <h2>Все замеры</h2>
+      <div id="tables"></div>
+    </div>
+
+    <p class="muted foot">
+      Это расчёт по формулам, а не объективная истина. Идеалы и шкала откалиброваны на 102 реальных лицах с оценками людей
+      (Face Research Lab London Set, DeBruine &amp; Jones, CC-BY) и дополнены луксмакс-конвенциями; все числа лежат в <code>js/config.js</code> и меняются.
+      Результат зависит от ракурса, объектива, света и мимики: одно лицо на разных фото даст разные цифры.
+    </p>
+  </section>
+</main>
+
+<!-- Скрипты подключаются с меткой времени, чтобы после правки файлов (например js/config.js)
+     браузер не подсовывал старую версию из кэша. Порядок важен. -->
+<script>
+  for (const name of ['config', 'geometry', 'frontal', 'profile', 'profile-auto', 'skin', 'scoring', 'app']) {
+    document.write('<script src="js/' + name + '.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+</body>
+</html>
