@@ -127,6 +127,11 @@
     const jawDef = kind === 'drawing' ? null : FR.skin.jawDefinition(fc, m.viz.P, m.ipdImg);
     const values = Object.assign({}, m.values, skin ? skin.values : {});
     if (jawDef !== null) values.jawDef = jawDef;
+    // на рисунке вместо кожи — штрихи на щеках: так рисуют морщины, мешки и высыпания
+    if (kind === 'drawing') {
+      const marks = FR.skin.drawingMarks(fc, m.viz.P, m.ipdImg);
+      if (marks !== null) values.drawMarks = marks;
+    }
     // Если масштаб по радужке снят плохо (или это рисунок), миллиметрам верить нельзя —
     // костную массу не считаем.
     if (kind === 'drawing' || values.ipdMm < 54 || values.ipdMm > 72) {
@@ -190,7 +195,7 @@
       for (const metric of FR.profile.implausible(pv)) { p.skipped[metric] = { implausible: true }; delete pv[metric]; }
       Object.assign(values, pv);
     }
-    return FR.scoring.total(values, state.gender);
+    return FR.scoring.total(values, state.gender, { drawing: state.frontal.kind === 'drawing' });
   }
 
   /* ------------------------------------------------------------------ отчёт */
@@ -266,7 +271,7 @@
     if (kind === 'drawing') {
       // про масштаб по радужке на рисунке говорить незачем: миллиметры и так не считаются
       warns = warns.filter((w) => !w.startsWith('Межзрачковое'));
-      warns.unshift('Похоже, это рисунок, а не фото. Кожа, размеры в миллиметрах и чёткость челюсти по рисунку не считаются. Пропорции на рисунках обычно преувеличены (крупные глаза, упрощённый нос), поэтому оценка рисунка неточна: шкала откалибрована на фотографиях живых людей.');
+      warns.unshift('Похоже, это рисунок, а не фото. Для рисунков своя шкала, подогнанная по мем-таблице тиров. Вместо кожи считаются нарисованные морщины и пятна; размеры в миллиметрах и тень под челюстью не считаются. Выражение лица и причёска не учитываются, поэтому рисунки, которые отличаются в основном ими, различаются плохо.');
     } else if (kind === 'gray') warns.push('Фото чёрно-белое: кожу по нему оценить нельзя, она не учитывается.');
     else if (!state.skin) warns.push('Кожу оценить не удалось: слишком мало чистой кожи в кадре.');
     else if (state.skin.upscaled) warns.push('Фото небольшое — мелкие высыпания могут быть не видны, оценка кожи завышена.');

@@ -32,7 +32,8 @@
     return C.tiers[C.tiers.length - 1][gender];
   }
 
-  function total(values, gender) {
+  /* opts.drawing — оценивается рисунок: для него своя шкала (см. config.js) */
+  function total(values, gender, opts) {
     const rows = [];
     for (const def of C.metrics) {
       const value = values[def.id];
@@ -70,7 +71,7 @@
 
     const overall = (1 - C.psl.failoShare) * mean + C.psl.failoShare * worstMean;
     const hasProfile = cats.some((c) => c.id === 'profile');
-    const cal = (hasProfile ? C.psl.calibrationProfile : C.psl.calibration)[gender];
+    const cal = (opts && opts.drawing ? C.psl.calibrationDrawing : hasProfile ? C.psl.calibrationProfile : C.psl.calibration)[gender];
     const t = -Math.log(1 - overall + C.psl.eps);
     const z = (t - cal.mean) / cal.sd;
     const psl = Math.max(0, Math.min(C.psl.max, C.psl.center + C.psl.spread * z));

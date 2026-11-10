@@ -332,5 +332,36 @@
     return { sat, white, gray, drawing: sat < 18 && white > 0.45 };
   }
 
-  FR.skin = { analyze, jawDefinition, colorStats };
+  /* --------------------------------------------------------------------------
+   * «Кожа» на рисунке. Морщины, мешки и высыпания художник рисует штрихами,
+   * поэтому меряем долю тёмных пикселей на щеках и подбородке: ниже глаз,
+   * без носа, рта и края лица.
+   * ------------------------------------------------------------------------ */
+  function drawingMarks(srcCanvas, P, ipdImg) {
+    const W = srcCanvas.width, H = srcCanvas.height;
+    const m = document.createElement('canvas'); m.width = W; m.height = H;
+    const g = m.getContext('2d');
+    const cx = OVAL.reduce((s, i) => s + P[i][0], 0) / OVAL.length;
+    const cy = OVAL.reduce((s, i) => s + P[i][1], 0) / OVAL.length;
+    g.fillStyle = '#fff';
+    poly(g, OVAL.map((i) => [cx + (P[i][0] - cx) * 0.86, cy + (P[i][1] - cy) * 0.9]));
+    g.globalCompositeOperation = 'destination-out';
+    g.fillRect(0, 0, W, Math.max(P[145][1], P[374][1]) + ipdImg * 0.02); // всё выше нижних век
+    poly(g, scaled(LIPS.map((i) => P[i]), 1.25, 1.5));
+    const nl = P[129], nr = P[358], nb = P[2], nt = P[6];
+    g.beginPath();
+    g.ellipse((nl[0] + nr[0]) / 2, (nt[1] + nb[1]) / 2 + ipdImg * 0.05, Math.abs(nr[0] - nl[0]) * 0.75, Math.abs(nb[1] - nt[1]) * 0.6, 0, 0, 7);
+    g.fill();
+    const md = g.getImageData(0, 0, W, H).data;
+    const px = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    let n = 0, dark = 0;
+    for (let i = 0; i < W * H; i++) {
+      if (md[i * 4 + 3] < 128) continue;
+      n++;
+      if (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2] < 150) dark++;
+    }
+    return n > 500 ? dark / n * 100 : null;
+  }
+
+  FR.skin = { analyze, jawDefinition, colorStats, drawingMarks };
 })();
