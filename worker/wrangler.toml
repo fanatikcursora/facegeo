@@ -1,0 +1,12 @@
+# Сервер-посредник для ИИ-оценки (Cloudflare Workers, бесплатный тариф).
+# Ключ Gemini сюда НЕ пишется: он задаётся секретом командой
+#   npx wrangler@4 secret put GEMINI_API_KEY
+name = "facegeo-ai"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+# С каких сайтов можно звать посредника (через запятую)
+ALLOWED_ORIGINS = "https://fanatikcursora.github.io,http://localhost:5173"
+# Модели Gemini по порядку: при лимите или ошибке берётся следующая
+MODELS = "gemini-3.6-flash,gemini-3.5-flash-lite"

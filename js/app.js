@@ -304,6 +304,7 @@
     if (state.profile) setupProfileEditor();
 
     renderScores();
+    if (FR.ai) FR.ai.reset();
     $('#report').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -507,7 +508,7 @@
       initProfileEvents,
       () => document.querySelectorAll('input[name=gender]').forEach((r) => r.addEventListener('change', () => {
         state.gender = r.value;
-        if (state.frontal) renderScores();
+        if (state.frontal) { renderScores(); if (FR.ai) FR.ai.reset(); }
       }))
     ];
     for (const init of parts) {
@@ -516,5 +517,5 @@
   });
 
   // для отладки из консоли: FR.app.analyze(blobАнфас, blobПрофиль)
-  FR.app = { analyze, state, getLandmarker, getSegmenter, toCanvas, detect, measureFrontal, markProfile, setFile };
+  FR.app = { analyze, state, getLandmarker, getSegmenter, toCanvas, detect, measureFrontal, markProfile, setFile, computeResult };
 })();

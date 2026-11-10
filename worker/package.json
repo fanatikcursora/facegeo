@@ -1,0 +1,10 @@
+{
+  "name": "facegeo-ai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test.mjs",
+    "dev": "node dev-server.mjs",
+    "deploy": "npx wrangler@4 deploy"
+  }
+}

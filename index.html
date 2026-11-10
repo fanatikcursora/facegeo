@@ -47,6 +47,27 @@
       <div id="cats"></div>
     </div>
 
+    <div class="card" id="aiBox" hidden>
+      <h2>ИИ-оценка (Gemini)</h2>
+      <p class="muted">По кнопке фото и замеры уйдут в Google Gemini через наш сервер. Мы фото не храним, но на бесплатном тарифе Google может использовать присланное для улучшения своих моделей.</p>
+      <button id="aiGo" class="small">Получить ИИ-оценку</button>
+      <p id="aiStatus" class="status"></p>
+      <div id="aiResult" hidden>
+        <div class="score-main">
+          <div><span id="aiPsl" class="ai-psl">—</span><span class="of"> / 8 PSL</span></div>
+          <div id="aiTier" class="ai-tier">—</div>
+        </div>
+        <p id="aiCompare" class="muted"></p>
+        <div id="aiCats"></div>
+        <p id="aiSummary"></p>
+        <div class="two">
+          <div><h3>Сильные стороны</h3><ul id="aiPlus"></ul></div>
+          <div><h3>Что тянет вниз</h3><ul id="aiMinus"></ul></div>
+        </div>
+        <p id="aiMeta" class="muted"></p>
+      </div>
+    </div>
+
     <div class="card" id="warnbox" hidden>
       <h2>Что снижает точность</h2>
       <ul id="warnings"></ul>
@@ -114,7 +135,7 @@
 <!-- Скрипты подключаются с меткой времени, чтобы после правки файлов (например js/config.js)
      браузер не подсовывал старую версию из кэша. Порядок важен. -->
 <script>
-  for (const name of ['config', 'geometry', 'frontal', 'profile', 'profile-auto', 'skin', 'scoring', 'app']) {
+  for (const name of ['config', 'geometry', 'frontal', 'profile', 'profile-auto', 'skin', 'scoring', 'app', 'ai']) {
     document.write('<script src="js/' + name + '.js?t=' + Date.now() + '"><\/script>');
   }
 </script>
