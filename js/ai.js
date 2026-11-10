@@ -27,6 +27,27 @@
   const scoreClass = (s) => (s >= 8 ? 'good' : s >= 5 ? 'mid' : 'bad');
   const active = () => !!FR.ai.endpoint;
   let seq = 0;          // номер текущего запроса: ответы на старые запросы не показываем
+
+  /* Память оценок: Gemini каждый раз отвечает немного по-разному, поэтому оценку того же фото
+   * (того же файла, при том же поле) показываем из памяти этого устройства и запрос не тратим.
+   * Хранятся только результаты, не фото. */
+  const CACHE_KEY = 'frAiCache1';
+  async function photoKey(text) {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(d)).slice(0, 12).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  function cacheGet(k) {
+    try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); return c[k] ? c[k].v : null; } catch (e) { return null; }
+  }
+  function cachePut(k, v) {
+    try {
+      const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+      c[k] = { v, t: Date.now() };
+      const keys = Object.keys(c).sort((a, b) => c[a].t - c[b].t);
+      while (keys.length > 40) delete c[keys.shift()]; // не больше 40 последних фото
+      localStorage.setItem(CACHE_KEY, JSON.stringify(c));
+    } catch (e) { /* память недоступна — просто не запоминаем */ }
+  }
   let lastGender = null;
 
   /* Уменьшенная копия фото в JPEG/base64: Gemini хватает 768 пикселей по большой стороне */
@@ -66,7 +87,7 @@
     $('#psl').textContent = '…';
     $('#tier').textContent = '';
     $('#overall').className = 'muted';
-    $('#overall').textContent = 'Gemini оценивает фото… обычно 10–20 секунд.';
+    $('#overall').textContent = 'Gemini оценивает фото… обычно 10–30 секунд, когда Google под нагрузкой — до минуты.';
     $('#cats').innerHTML = '';
     showExtras(false);
   }
@@ -117,6 +138,15 @@
     };
     pending();
     const payload = JSON.stringify(body);
+    let key = null;
+    try { key = await photoKey(body.frontal + '|' + (body.profile || '') + '|' + gender); } catch (e) { /* без памяти */ }
+    if (my !== seq) return;
+    const remembered = key && cacheGet(key);
+    if (remembered) {
+      render(remembered, res, gender);
+      $('#aiMeta').textContent += ' Это фото уже оценивалось на этом устройстве — показана та же оценка, запрос к Gemini не тратился.';
+      return;
+    }
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // Серверы Gemini иногда перегружены (ошибка 503) — тогда пробуем ещё раз через паузу.
     // Лимиты (429) и отказы не повторяем: повтор их не исправит.
@@ -129,7 +159,7 @@
         try { out = await r.json(); } catch (e) { /* не JSON */ }
       } catch (e) { netErr = true; console.warn('ИИ-оценка:', e); }
       if (my !== seq) return; // пока ждали, начали новый анализ
-      if (r && r.ok && out && out.ok && typeof out.psl === 'number') { render(out, res, gender); return; }
+      if (r && r.ok && out && out.ok && typeof out.psl === 'number') { if (key) cachePut(key, out); render(out, res, gender); return; }
       const overloaded = !netErr && r && (r.status >= 500 || (out && /^upstream/.test(out.error || '')));
       if (overloaded && attempt < WAITS.length) {
         $('#overall').textContent = `Gemini сейчас перегружен, пробую ещё раз (попытка ${attempt + 2} из ${WAITS.length + 1})…`;
