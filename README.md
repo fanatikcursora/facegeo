@@ -106,3 +106,41 @@ doi:10.6084/m9.figshare.5047666. У каждого лица в наборе ес
 - Сетка лица сглаживает контур, поэтому углы челюсти в анфас меняются от лица
   к лицу слабо и весят мало.
 - Фото с поворотом головы больше 15° не принимаются.
+
+## ИИ-оценка (Gemini) — по желанию
+
+После обычного анализа на сайте можно нажать «Получить ИИ-оценку»: фото (уменьшенное
+до 768 px) и все замеры сайта уходят в Google Gemini, и он возвращает свой балл PSL,
+категории и короткий разбор. Без нажатия ничего не отправляется. На бесплатном тарифе
+Google может использовать присланное для улучшения своих моделей — об этом сказано
+рядом с кнопкой.
+
+Ключ Gemini нельзя класть на сайт (GitHub Pages отдаёт все файлы всем), поэтому между
+сайтом и Gemini стоит посредник — Cloudflare Worker из папки `worker/` (бесплатный тариф).
+
+Как включить:
+
+1. Получить бесплатный ключ в [Google AI Studio](https://aistudio.google.com) → Get API key.
+2. Завести бесплатный аккаунт [Cloudflare](https://dash.cloudflare.com/sign-up).
+3. Развернуть посредника — любым из двух способов.
+   - **В браузере (можно с телефона):** Workers & Pages → Create → Worker, имя
+     `facegeo-ai` → Deploy → Edit code → вставить весь `worker/src/index.js` → Deploy.
+     Затем Settings → Variables and Secrets:
+     - Secret `GEMINI_API_KEY` — ключ из шага 1;
+     - Text `ALLOWED_ORIGINS` — `https://fanatikcursora.github.io,http://localhost:5173`;
+     - Text `MODELS` — `gemini-3.6-flash,gemini-3.5-flash-lite`.
+   - **С компьютера:** в папке `worker`
+     ```bash
+     npx wrangler@4 login
+     npx wrangler@4 secret put GEMINI_API_KEY
+     npx wrangler@4 deploy
+     ```
+4. Вписать адрес посредника (`https://facegeo-ai.<поддомен>.workers.dev/rate`) в
+   `FR.ai.endpoint` в `js/ai.js` и выложить сайт.
+
+Проверка без ключа: `node worker/test.mjs`. Посредник локально: `node worker/dev-server.mjs`
+(без `GEMINI_API_KEY` отвечает подставным ответом).
+
+Посредник пускает только сайты из `ALLOWED_ORIGINS` и не больше 6 оценок за 10 минут с одного
+адреса. Это защищает бесплатный лимит от случайного расхода, но не от целенаправленного:
+запросы не из браузера могут подделать адрес сайта.
