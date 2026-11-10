@@ -164,6 +164,9 @@
     v.lipRatio = lowerV / Math.max(upperV, 1e-6);
 
     /* ---- КОСТНАЯ МАССА (мм) ---- */
+    // Выраженность скул: насколько лицо по скулам шире, чем по щекам на уровне кончика носа.
+    // У лица с выступающими скулами щёки под ними «уходят внутрь», у мягкого — почти той же ширины.
+    v.cheekProm = bizyg / Math.max(1e-6, F[361][0] - F[132][0]);
     v.bizygMm = bizyg * mm;
     v.bigonialMm = bigonial * mm;
     v.chinWidthMm = chinW * mm;

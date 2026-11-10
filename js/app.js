@@ -137,6 +137,8 @@
     if (kind === 'drawing' || values.ipdMm < 54 || values.ipdMm > 72) {
       for (const id of ['bizygMm', 'bigonialMm', 'chinWidthMm', 'faceHeightMm']) delete values[id];
     }
+    // на рисунке щёки и скулы нарисованы условно — их выраженность по рисунку не меряем
+    if (kind === 'drawing') delete values.cheekProm;
     return { canvas: fc, m, skin, values, kind };
   }
 
