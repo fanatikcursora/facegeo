@@ -33,6 +33,7 @@
       </label>
     </div>
 
+    <p id="aiConsent" class="muted consent" hidden>Рейт ставит ИИ Google Gemini: при анализе фото отправляется в Google через наш сервер. Мы фото не храним, но на бесплатном тарифе Google может использовать присланное для улучшения своих моделей.</p>
     <button id="go" disabled>Анализировать</button>
     <p id="status" class="status"></p>
   </section>
@@ -44,28 +45,24 @@
         <div id="tier">—</div>
       </div>
       <p id="overall" class="muted"></p>
+      <p id="genderNote" class="status error" hidden>Пол изменён — нажмите «Анализировать» ещё раз, чтобы ИИ пересчитал оценку.</p>
       <div id="cats"></div>
+      <p id="aiSummary" hidden></p>
+      <div id="aiLists" class="two" hidden>
+        <div><h3>Сильные стороны</h3><ul id="aiPlus"></ul></div>
+        <div><h3>Что тянет вниз</h3><ul id="aiMinus"></ul></div>
+      </div>
+      <p id="aiMeta" class="muted" hidden></p>
     </div>
 
-    <div class="card" id="aiBox" hidden>
-      <h2>ИИ-оценка (Gemini)</h2>
-      <p class="muted">По кнопке фото и замеры уйдут в Google Gemini через наш сервер. Мы фото не храним, но на бесплатном тарифе Google может использовать присланное для улучшения своих моделей.</p>
-      <button id="aiGo" class="small">Получить ИИ-оценку</button>
-      <p id="aiStatus" class="status"></p>
-      <div id="aiResult" hidden>
-        <div class="score-main">
-          <div><span id="aiPsl" class="ai-psl">—</span><span class="of"> / 8 PSL</span></div>
-          <div id="aiTier" class="ai-tier">—</div>
-        </div>
-        <p id="aiCompare" class="muted"></p>
-        <div id="aiCats"></div>
-        <p id="aiSummary"></p>
-        <div class="two">
-          <div><h3>Сильные стороны</h3><ul id="aiPlus"></ul></div>
-          <div><h3>Что тянет вниз</h3><ul id="aiMinus"></ul></div>
-        </div>
-        <p id="aiMeta" class="muted"></p>
+    <div class="card" id="geoCard" hidden>
+      <h2>По замерам сайта</h2>
+      <div class="score-main">
+        <div><span id="geoPsl" class="geo-psl">—</span><span class="of"> / 8 PSL</span></div>
+        <div id="geoTier" class="geo-tier">—</div>
       </div>
+      <p id="geoOverall" class="muted"></p>
+      <div id="geoCats"></div>
     </div>
 
     <div class="card" id="warnbox" hidden>

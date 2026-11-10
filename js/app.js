@@ -228,15 +228,17 @@
   function renderScores() {
     const res = computeResult();
     const g = state.gender;
+    // Когда рейт ставит Gemini, балл по замерам идёт в карточку «По замерам сайта»
+    const T = (id) => $(FR.ai && FR.ai.active() ? '#geo' + id[0].toUpperCase() + id.slice(1) : '#' + id);
 
-    $('#psl').textContent = res.psl.toFixed(2);
-    $('#tier').textContent = res.tier;
+    T('psl').textContent = res.psl.toFixed(2);
+    T('tier').textContent = res.tier;
     const pct = normalCdf(res.z) * 100;
     const pctText = pct > 99.5 ? 'более 99%' : pct < 0.5 ? 'менее 1%' : `примерно ${pct.toFixed(0)}%`;
-    $('#overall').textContent = `Итог ${(res.overall * 100).toFixed(0)}% — на ${Math.abs(res.z).toFixed(1)} σ ${res.z >= 0 ? 'выше' : 'ниже'} среднего человека. По этим замерам лицо лучше, чем у ${pctText} людей из калибровочной выборки.`
+    T('overall').textContent = `Итог ${(res.overall * 100).toFixed(0)}% — на ${Math.abs(res.z).toFixed(1)} σ ${res.z >= 0 ? 'выше' : 'ниже'} среднего человека. По этим замерам лицо лучше, чем у ${pctText} людей из калибровочной выборки.`
       + (res.imputed.length ? ` По этому фото не оценить: ${res.imputed.join(', ').toLowerCase()} — вместо них взято среднее по выборке.` : '');
 
-    $('#cats').innerHTML = res.cats.map((c) => `
+    T('cats').innerHTML = res.cats.map((c) => `
       <div class="cat">
         <span class="cat-name">${esc(c.name)}</span>
         <span class="bar"><i class="${scoreClass(c.score)}" style="width:${(c.score * 100).toFixed(0)}%"></i></span>
@@ -304,7 +306,7 @@
     if (state.profile) setupProfileEditor();
 
     renderScores();
-    if (FR.ai) FR.ai.reset();
+    if (FR.ai) { FR.ai.reset(); FR.ai.autoRate(); }
     $('#report').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -508,7 +510,7 @@
       initProfileEvents,
       () => document.querySelectorAll('input[name=gender]').forEach((r) => r.addEventListener('change', () => {
         state.gender = r.value;
-        if (state.frontal) { renderScores(); if (FR.ai) FR.ai.reset(); }
+        if (state.frontal) { renderScores(); if (FR.ai) FR.ai.genderChanged(r.value); }
       }))
     ];
     for (const init of parts) {

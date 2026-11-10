@@ -1,15 +1,21 @@
 /* ============================================================================
- * ai.js — ИИ-оценка через Google Gemini (по кнопке).
+ * ai.js — оценка через Google Gemini.
  *
- * Сайт отправляет посреднику (worker/, Cloudflare) уменьшенное фото анфас,
- * фото профиля, если оно размечено, и все свои замеры. Посредник спрашивает Gemini
- * и возвращает его балл, категории и короткий разбор. Без нажатия кнопки
- * ничего никуда не уходит. Пока адрес посредника не задан, блок не показывается.
+ * Если задан адрес посредника (endpoint), рейт всегда ставит Gemini: при каждом
+ * анализе сайт отправляет посреднику (worker/, Cloudflare) уменьшенное фото анфас,
+ * фото профиля, если оно есть, и все свои замеры. Gemini смотрит на фото,
+ * учитывает замеры и возвращает балл, категории и разбор. Балл по одним замерам
+ * показывается отдельно. Если Gemini недоступен (кончился лимит, нет сети) —
+ * рейта нет, сайт так и пишет.
+ * Без адреса посредника сайт работает как раньше: рейт по замерам.
  * ========================================================================== */
 (function () {
   FR.ai = {
-    // Адрес посредника после развёртывания: https://facegeo-ai.<ваш-поддомен>.workers.dev/rate
-    endpoint: ''
+    // Адрес посредника (Cloudflare Worker)
+    endpoint: 'https://facegeo-ai.legitcufer.workers.dev/rate',
+    /* Калибровка шкалы Gemini по калибровочной выборке (как у замеров):
+     * PSL = 4.1 + 0.77 × (балл Gemini − mean) / sd. Пока null — показывается как есть. */
+    calibration: null
   };
 
   const CATS = [
@@ -19,12 +25,9 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const scoreClass = (s) => (s >= 8 ? 'good' : s >= 5 ? 'mid' : 'bad');
-
-  function status(text, isError) {
-    const el = $('#aiStatus');
-    el.textContent = text || '';
-    el.className = isError ? 'status error' : 'status';
-  }
+  const active = () => !!FR.ai.endpoint;
+  let seq = 0;          // номер текущего запроса: ответы на старые запросы не показываем
+  let lastGender = null;
 
   /* Уменьшенная копия фото в JPEG/base64: Gemini хватает 768 пикселей по большой стороне */
   function jpegB64(canvas, maxSide) {
@@ -49,21 +52,39 @@
     };
   }
 
-  function reset() {
-    const box = $('#aiBox');
-    if (!box) return;
-    box.hidden = !FR.ai.endpoint || !FR.app.state.frontal;
-    $('#aiResult').hidden = true;
-    $('#aiGo').disabled = false;
-    status('');
+  function calibrated(raw, gender) {
+    const c = FR.ai.calibration && FR.ai.calibration[gender];
+    if (!c) return raw;
+    return Math.max(0, Math.min(8, 4.1 + 0.77 * (raw - c.mean) / c.sd));
   }
 
+  /* Главная карточка: ждём / ошибка / результат */
+  function showExtras(on) {
+    for (const id of ['#aiSummary', '#aiLists', '#aiMeta']) $(id).hidden = !on;
+  }
+  function pending() {
+    $('#psl').textContent = '…';
+    $('#tier').textContent = '';
+    $('#overall').className = 'muted';
+    $('#overall').textContent = 'Gemini оценивает фото… обычно 10–20 секунд.';
+    $('#cats').innerHTML = '';
+    showExtras(false);
+  }
+  function failed(msg) {
+    $('#psl').textContent = '—';
+    $('#tier').textContent = '';
+    $('#overall').className = 'status error';
+    $('#overall').textContent = msg + ' Без ИИ рейт не ставится; замеры сайта — ниже.';
+    $('#cats').innerHTML = '';
+    showExtras(false);
+  }
   function render(out, res, gender) {
-    const tier = FR.scoring.tierFor(out.psl, gender);
-    $('#aiPsl').textContent = out.psl.toFixed(2);
-    $('#aiTier').textContent = tier;
-    $('#aiCompare').textContent = `По замерам сайта: ${res.psl.toFixed(2)} (${res.tier}). ИИ смотрит на лицо целиком, поэтому оценки могут расходиться.`;
-    $('#aiCats').innerHTML = CATS.filter(([k]) => out.categories[k] !== null && out.categories[k] !== undefined).map(([k, name]) => `
+    const psl = calibrated(out.psl, gender);
+    $('#psl').textContent = psl.toFixed(2);
+    $('#tier').textContent = FR.scoring.tierFor(psl, gender);
+    $('#overall').className = 'muted';
+    $('#overall').textContent = `Оценка Gemini: он смотрит на лицо целиком и учитывает замеры сайта. По одним замерам — ${res.psl.toFixed(2)} (${res.tier}).`;
+    $('#cats').innerHTML = CATS.filter(([k]) => typeof out.categories[k] === 'number').map(([k, name]) => `
       <div class="cat">
         <span class="cat-name">${esc(name)}</span>
         <span class="bar"><i class="${scoreClass(out.categories[k])}" style="width:${(out.categories[k] * 10).toFixed(0)}%"></i></span>
@@ -74,45 +95,64 @@
     $('#aiMinus').innerHTML = out.weaknesses.map((s) => `<li>${esc(s)}</li>`).join('') || '<li class="muted">—</li>';
     $('#aiMeta').textContent = (out.photoIssues.length ? 'Что мешает оценке: ' + out.photoIssues.join('; ') + '. ' : '')
       + `Модель: ${out.model}. Одно и то же фото может получить немного разные оценки.`;
-    $('#aiResult').hidden = false;
+    showExtras(true);
   }
 
-  async function run() {
+  /* Вызывается после каждого анализа */
+  async function autoRate() {
+    if (!active()) return;
     const st = FR.app.state;
-    if (!FR.ai.endpoint || !st.frontal) return;
+    if (!st.frontal) return;
+    const my = ++seq;
     const gender = st.gender;
+    lastGender = gender;
+    $('#genderNote').hidden = true;
     const res = FR.app.computeResult();
     const body = {
       frontal: jpegB64(st.frontal.canvas, 768),
-      profile: st.profile && st.profile.confirmed && st.profile.pts ? jpegB64(st.profile.canvas, 768) : undefined,
+      profile: st.profile && st.profile.canvas ? jpegB64(st.profile.canvas, 768) : undefined,
       gender,
       kind: st.frontal.kind,
       site: sitePayload(res, gender)
     };
-    $('#aiGo').disabled = true;
-    status('Gemini смотрит на фото… обычно 5–20 секунд.');
+    pending();
+    let msg;
     try {
       const r = await fetch(FR.ai.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       let out = null;
       try { out = await r.json(); } catch (e) { /* не JSON */ }
-      if (!r.ok || !out) { status((out && out.message) || `Сервер ИИ-оценки ответил ошибкой ${r.status}.`, true); return; }
-      if (!out.ok) { status('ИИ не стал оценивать это фото' + (out.reason ? ': ' + out.reason : '.'), true); return; }
-      if (typeof out.psl !== 'number') { status('ИИ вернул ответ без балла. Попробуйте ещё раз.', true); return; }
-      status('');
-      render(out, res, gender);
+      if (my !== seq) return; // пока ждали, начали новый анализ
+      if (!r.ok || !out) msg = (out && out.message) || `Сервер ИИ-оценки ответил ошибкой ${r.status}.`;
+      else if (!out.ok) msg = 'ИИ не стал оценивать это фото' + (out.reason ? ': ' + out.reason : '.');
+      else if (typeof out.psl !== 'number') msg = 'ИИ вернул ответ без балла. Попробуйте ещё раз.';
+      else { render(out, res, gender); return; }
     } catch (e) {
+      if (my !== seq) return;
       console.warn('ИИ-оценка:', e);
-      status('Не удалось связаться с сервером ИИ-оценки. Проверьте интернет и попробуйте ещё раз.', true);
-    } finally {
-      $('#aiGo').disabled = false;
+      msg = 'Не удалось связаться с сервером ИИ-оценки. Проверьте интернет и попробуйте ещё раз.';
     }
+    failed(msg);
+  }
+
+  /* Показывает/прячет то, что относится к ИИ, после отрисовки отчёта */
+  function reset() {
+    $('#geoCard').hidden = !active() || !FR.app.state.frontal;
+    if (!active()) showExtras(false);
+  }
+
+  /* Пол сменили после анализа: оценка Gemini была для прежнего пола */
+  function genderChanged(g) {
+    if (!active() || lastGender === null) return;
+    $('#genderNote').hidden = g === lastGender;
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const btn = $('#aiGo');
-    if (btn) btn.addEventListener('click', run);
+    const note = $('#aiConsent');
+    if (note) note.hidden = !active();
   });
 
+  FR.ai.autoRate = autoRate;
   FR.ai.reset = reset;
-  FR.ai.run = run;
+  FR.ai.genderChanged = genderChanged;
+  FR.ai.active = active;
 })();

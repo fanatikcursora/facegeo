@@ -77,8 +77,11 @@ code { background: var(--line); padding: 1px 5px; border-radius: 4px; }
 .row-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .row-buttons button.small { margin-bottom: 0; }
 
-/* ИИ-оценка */
-#aiBox .ai-psl { font-size: 40px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-#aiBox .ai-tier { font-size: 24px; font-weight: 700; color: var(--accent); }
-#aiBox #aiResult { margin-top: 12px; display: grid; gap: 8px; }
-#aiBox h3 { margin: 6px 0; }
+/* Рейт от Gemini и карточка «По замерам сайта» */
+.consent { margin: 0 0 10px; }
+#aiSummary { margin: 12px 0 4px; }
+#aiLists h3 { margin: 6px 0; }
+#aiMeta { margin: 8px 0 0; }
+#genderNote { margin: 4px 0 0; }
+.geo-psl { font-size: 32px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.geo-tier { font-size: 20px; font-weight: 700; color: var(--muted); }
